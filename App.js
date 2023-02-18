@@ -1,7 +1,7 @@
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { EvilIcons } from '@expo/vector-icons';
+
 import {
   StyleSheet,
   Text,
@@ -12,36 +12,43 @@ import {
   Alert,
 } from 'react-native';
 import { theme } from './colors';
+import Todo from './components/Todo';
 
-const STORAGE_KEY = '@todos';
+const TODO_KEY = '@todos';
+const WORKING_KEY = '@WORKING';
 
 export default function App() {
-  const [working, setWorking] = useState(true);
+  const [working, setWorking] = useState(null);
   const [text, setText] = useState('');
   const [todos, setTodos] = useState({});
-  const travel = () => setWorking(false);
-  const work = () => setWorking(true);
+  const changeCategory = async (working) => {
+    setWorking(working);
+    await AsyncStorage.setItem(WORKING_KEY, JSON.stringify(working));
+  };
+
   const onChangeText = (e) => setText(e);
 
   const saveTodos = (toSave) => {
-    return AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
+    return AsyncStorage.setItem(TODO_KEY, JSON.stringify(toSave));
   };
+
   const addTodo = async () => {
     if (!text) {
       return;
     }
-    const newTodos = { ...todos, [Date.now()]: { text, working } };
+    const newTodos = { ...todos, [Date.now()]: { text, working, done: false } };
     setTodos(newTodos);
     await saveTodos(newTodos);
     setText('');
   };
+
   const loadTodos = async () => {
-    const prevTodos = await AsyncStorage.getItem(STORAGE_KEY);
+    const prevTodos = await AsyncStorage.getItem(TODO_KEY);
     setTodos(JSON.parse(prevTodos));
-    console.log(prevTodos);
   };
 
-  const deleteTodo = async (key) => {
+  const deleteTodo = (key) => {
+    console.log(key);
     Alert.alert('Delete Todo?', 'Are you sure?', [
       {
         text: 'Cancel',
@@ -60,14 +67,42 @@ export default function App() {
     ]);
   };
 
+  const editText = (key, text) => {
+    console.log(text);
+    const todo = todos[key];
+    const newTodo = { ...todo, text };
+    const newTodos = { ...todos, [key]: newTodo };
+    setTodos(newTodos);
+    saveTodos(newTodos);
+  };
+
+  const changeDone = (key) => {
+    console.log(key);
+    const todo = todos[key];
+    const newTodo = { ...todo, done: !todo.done };
+    const newTodos = { ...todos, [key]: newTodo };
+    setTodos(newTodos);
+    saveTodos(newTodos);
+  };
+
+  const loadWorking = async () => {
+    const prevWorking = await AsyncStorage.getItem(WORKING_KEY);
+    setWorking(JSON.parse(prevWorking));
+  };
+
   useEffect(() => {
     loadTodos();
   }, []);
+
+  useEffect(() => {
+    loadWorking();
+  }, []);
+
   return (
     <View style={styles.container}>
       <StatusBar style='auto' />
       <View style={styles.header}>
-        <TouchableOpacity onPress={work}>
+        <TouchableOpacity onPress={() => changeCategory(true)}>
           <Text
             style={{ ...styles.btnText, color: working ? 'white' : theme.grey }}
           >
@@ -75,7 +110,7 @@ export default function App() {
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
-          onPress={travel}
+          onPress={() => changeCategory(false)}
           style={{ ...styles.btnText, color: working ? 'white' : theme.grey }}
         >
           <Text
@@ -96,16 +131,19 @@ export default function App() {
         />
       </View>
       <ScrollView>
-        {Object.keys(todos).map((key) =>
-          todos[key].working === working ? (
-            <View key={key} style={styles.todo}>
-              <Text style={styles.todoText}>{todos[key].text}</Text>
-              <TouchableOpacity onPress={() => deleteTodo(key)}>
-                <EvilIcons name='trash' size={24} color='white' />
-              </TouchableOpacity>
-            </View>
-          ) : null
-        )}
+        {todos &&
+          Object.keys(todos).map((key) =>
+            todos[key].working === working ? (
+              <Todo
+                key={key}
+                id={key}
+                todo={todos[key]}
+                deleteTodo={deleteTodo}
+                editText={editText}
+                changeDone={changeDone}
+              />
+            ) : null
+          )}
       </ScrollView>
     </View>
   );
@@ -134,19 +172,15 @@ const styles = StyleSheet.create({
     marginVertical: 20,
     fontSize: 18,
   },
-  todo: {
-    backgroundColor: theme.grey,
-    marginBottom: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 40,
-    borderRadius: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
+
   todoText: {
     color: 'white',
     fontSize: 16,
     fontWeight: '500',
+  },
+  btns: {
+    flexDirection: 'row',
+    flex: 0.4,
+    justifyContent: 'space-between',
   },
 });
